@@ -1,37 +1,37 @@
-// app.js
 const m = require("mithril");
+const io = require("socket.io-client");
 
 const WeatherApp = {
-  apikey: "5bc2b4f40acfffa046713955a4370d52",
+  socket: null,
   data: null,
   searchValue: "",
   loading: true,
 
-  fetchWeather: function (city) {
-    this.loading = true;
-    return m
-      .request({
-        method: "GET",
-        url: `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${this.apikey}`,
-      })
-      .then((data) => {
-        this.data = data;
-        if (data.cod == 200) {
-          document.body.style.backgroundImage = `url('https://source.unsplash.com/1600x900/?${data.weather[0].description}')`;
-        }
-      })
-      .catch((error) => {
-        console.error("Error fetching weather:", error);
-        this.data = { cod: "404" };
-      })
-      .finally(() => {
-        this.loading = false;
-        m.redraw();
-      });
+  oninit: function () {
+    this.socket = io("http://localhost:3000");
+    this.socket.on("connect", () => {
+      console.log("Connected to server");
+      this.fetchWeather("Greater Noida");
+    });
+
+    this.socket.on("weatherData", (data) => {
+      this.data = data;
+      this.loading = false;
+      document.body.style.backgroundImage = `url('https://source.unsplash.com/1600x900/?${data.description}')`;
+      m.redraw();
+    });
+
+    this.socket.on("weatherError", (error) => {
+      console.error("Error fetching weather:", error);
+      this.data = { cod: "404" };
+      this.loading = false;
+      m.redraw();
+    });
   },
 
-  oninit: function () {
-    this.fetchWeather("Greater Noida");
+  fetchWeather: function (city) {
+    this.loading = true;
+    this.socket.emit("fetchWeather", city);
   },
 
   view: function () {
@@ -65,35 +65,33 @@ const WeatherApp = {
               m(".location", [
                 m(
                   "h1.location-city",
-                  this.data.cod === 200
-                    ? `Weather in ${this.data.name}`
-                    : this.data.cod === 400
-                    ? "Something went wrong!"
+                  this.data.city
+                    ? `Weather in ${this.data.city}`
                     : "City not found"
                 ),
-                this.data.cod === 200 &&
+                this.data.icon &&
                   m("span.icon", {
                     style: {
-                      backgroundImage: `url(https://openweathermap.org/img/wn/${this.data.weather[0].icon}@2x.png)`,
+                      backgroundImage: `url(https://openweathermap.org/img/wn/${this.data.icon}@2x.png)`,
                     },
                   }),
               ]),
-              this.data.cod === 200 &&
+              this.data.temperature &&
                 m(".temperature", [
-                  m("h2.temperature-degree", `${this.data.main.temp}°C`),
+                  m("h2.temperature-degree", `${this.data.temperature}°C`),
                   m(
                     ".weather-description",
                     { style: { textTransform: "capitalize" } },
-                    this.data.weather[0].description
+                    this.data.description
                   ),
-                  m(".humidity", `Humidity: ${this.data.main.humidity}%`),
-                  m(".humidity", `Feels like: ${this.data.main.feels_like}°C`),
-
-                  m(".wind", `Wind: ${this.data.wind.speed}Km/hr`),
+                  m(".humidity", `Humidity: ${this.data.humidity}%`),
+                  m(".humidity", `Feels like: ${this.data.feels_like}°C`),
+                  m(".wind", `Wind: ${this.data.wind_speed}Km/hr`),
                 ]),
             ],
       ]),
     ]);
   },
 };
+
 module.exports = WeatherApp;
